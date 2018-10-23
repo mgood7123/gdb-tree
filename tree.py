@@ -1,6 +1,13 @@
 import gdb
 
-depth = 14
+depth = 1
+
+curr = []
+prev = []
+diff = []
+diff_curr = []
+diff_prev = []
+
 
 def valinfo(foo_val):
         c = foo_val.type.code
@@ -34,7 +41,11 @@ def is_string(v):
     return str(v.type).startswith("char")
 
 lineend = ';'
-def print_struct_follow_pointers_inner(frame, name, value, level_limit = 3, level = 0, pointers = 0):
+
+def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3, level = 0, pointers = 0):
+    tmp = []
+    curr.append(tmp)
+
     indent = '  ' * level
     pointer_indent = '*' * pointers
     s = value
@@ -51,6 +62,7 @@ def print_struct_follow_pointers_inner(frame, name, value, level_limit = 3, leve
         indent = '  ' * level
         for k in stype.keys():
             v = s[k]
+            tmp.append(k)
             vtype = gdb.types.get_basic_type(v.type)
             if is_pointer(v) and not is_string(v):
                 try:
@@ -61,19 +73,22 @@ def print_struct_follow_pointers_inner(frame, name, value, level_limit = 3, leve
                         v1.fetch_lazy()
                 except gdb.error:
                     gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
+                    tmp.append("NULL")
                     continue
-                print_struct_follow_pointers_inner(frame, k, v1, level_limit, level)
+                print_struct_follow_pointers_inner(frame, k, v1, tmp, level_limit, level)
             elif is_container(v):
-                print_struct_follow_pointers_inner(frame, k, v, level_limit, level)
+                print_struct_follow_pointers_inner(frame, k, v, tmp, level_limit, level)
             else:
                 gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
+                tmp.append(str(v))
         level = level - 1
         indent = '  ' * level
         gdb.write('%s} %s %s%s\n' % (indent, pointer_indent, name, lineend))
     else:
         gdb.write('%s%s { ... } %s %s%s\n' % (indent, stype, pointer_indent, name, lineend))
 
-def print_struct_follow_pointers(frame, foo_sym, value, level_limit = 3, level = 0):
+def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, level = 0):
+    curr = []
     indent = '  ' * level
     s = value
     stype = gdb.types.get_basic_type(s.type)
@@ -81,7 +96,7 @@ def print_struct_follow_pointers(frame, foo_sym, value, level_limit = 3, level =
 
     if not is_container(s):
         gdb.write('%s%s\n' % (indent, s))
-        return
+        return curr
 
     if level < level_limit:
         gdb.write('%s%s {' % (indent, stype,))
@@ -91,6 +106,7 @@ def print_struct_follow_pointers(frame, foo_sym, value, level_limit = 3, level =
 
         for k in stype.keys():
             v = s[k]
+            curr.append(k)
             vtype = gdb.types.get_basic_type(v.type)
             if is_pointer(v) and not is_string(v):
                 try:
@@ -99,12 +115,14 @@ def print_struct_follow_pointers(frame, foo_sym, value, level_limit = 3, level =
                     pointers = pointers + 1
                 except gdb.error:
                     gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
+                    curr.append("NULL")
                     continue
-                print_struct_follow_pointers_inner(frame, k, v1, level_limit, level, pointers)
+                print_struct_follow_pointers_inner(frame, k, v1, curr, level_limit, level, pointers)
             elif is_container(v):
-                print_struct_follow_pointers_inner(frame, k, v, level_limit, level, pointers)
+                print_struct_follow_pointers_inner(frame, k, v, curr, level_limit, level, pointers)
             else:
                 gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
+                curr.append(str(v))
         level = level - 1
         indent = '  ' * level
         gdb.write('%s} ' % indent)
@@ -126,21 +144,110 @@ def print_struct_follow_pointers(frame, foo_sym, value, level_limit = 3, level =
     if footype.code == gdb.TYPE_CODE_PTR:
         gdb.write(' ')
     gdb.write('%s%s\n' % (foo_sym.name, lineend))
+    return curr
 
 # source https://stackoverflow.com/questions/23578312/gdb-pretty-printing-with-python-a-recursive-structure/23970415?s=2|8.2641#23970415
 
 def syminfo(foo_sym):
         gdb.write('Symbol "%s" found and is of type "%s" and a value of type "%s" and value "%s"\n' % (foo_sym.name, foo_sym.type, foo_sym.value, foo_sym.value()))
         
+def rec(x, level = 0):
+    i = ' ' * level
+    for item, val in zip(x[::2], x[1::2]):
+        if isinstance(val, list):
+            gdb.write("%sitem %s : [\n" %(i, item))
+            rec(val, level + 2)
+            gdb.write("%s]\n" %(i))
+        else:
+            gdb.write("%sitem %s : val %s\n" %(i, item, val))
+            
+diff_curr = []
+diff_prev = []
+def diffinfo(a,b,c,d):
+  gdb.write("\nDIFF INFO\n")
+  gdb.write("a1 = %s\n" % a)
+  gdb.write("b1 = %s\n" % b)
+  gdb.write("a2 = %s\n" % c)
+  gdb.write("b2 = %s\n" % d)
+  gdb.write("DIFF INFO\n\n")
+  
+#itterate two items at a time
+def cmp(a1, b1, a2, b2, curr):
+    curr = []
+    diffinfo(a1,b1,a2,b2)
+    if type(b1) != list and type(b2) != list:
+      gdb.write("is b1 == b2\n")
+      if b1 == b2:
+        gdb.write("yes\n")
+        gdb.write("is a1 is not None\n")
+        if a1 is not None:
+          gdb.write("yes\n")
+          curr.append(a1)
+        else:
+          gdb.write("no\n")
+        curr.append(b1)
+      else:
+        gdb.write("no\n")
+    if type(b1) == list and type(b2) == list:
+        if a1 is not None:
+            curr.append(a1)
+        tmp = []
+        curr.append(tmp)
+        ita = iter(b1)
+        itb = iter(b2)
+        for (x1, x2), (y1, y2) in zip(zip(ita, ita), zip(itb, itb)):
+          curr = cmp(x1,x2,y1,y2, tmp)
+    return curr
+  
 def do_dot(foo_sym, frame):
     foo_val = foo_sym.value
     if foo_val(frame).type.code == gdb.TYPE_CODE_PTR:
         foo_val = foo_val(frame).dereference
         while foo_val().type.code == gdb.TYPE_CODE_PTR:
             foo_val = foo_val().dereference
+    global curr
+    global prev
+    if curr:
+        prev = curr
+        
+    global diff_curr
+    global diff_prev
+    if diff_curr:
+        diff_prev = diff_curr
+        
+    curr = print_struct_follow_pointers(frame, foo_sym, foo_val(), curr, depth)
+    gdb.write("curr = [\n")
+    rec(curr, 2)
+    gdb.write("]\n")
+
+    gdb.write("prev = [\n")
+    rec(prev, 2)
+    gdb.write("]\n")
+
+    diff_curr = cmp(None, curr, None, prev, diff_curr)
     
-    print_struct_follow_pointers(frame, foo_sym, foo_val(), depth)
+    gdb.write("diff_curr = [\n")
+    rec(diff_curr, 2)
+    gdb.write("]\n")
     
+    gdb.write("diff_prev = [\n")
+    rec(diff_prev, 2)
+    gdb.write("]\n")
+    
+    diff_curr2 = cmp(None, diff_curr, None, diff_prev, diff_curr)
+    gdb.write("diff_curr2 = [\n")
+    rec(diff_curr2, 2)
+    gdb.write("]\n")
+    
+    gdb.write("curr = %s\n" % curr)
+    gdb.write("prev = %s\n" % prev)
+    
+    gdb.write("dfc1 = %s\n" % diff_curr)
+    gdb.write("dfp1 = %s\n" % diff_prev)
+    gdb.write("dfc2 = %s\n" % diff_curr2)
+
+    
+
 def not_running():
     gdb.write('The program is not being run.\n')
 
