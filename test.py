@@ -1,11 +1,12 @@
 import gdb
 
-depth = 999
+depth = 5
 
 curr = []
 prev = []
 diff = []
 diff_curr = []
+diff_curr2 = []
 diff_prev = []
 
 
@@ -176,20 +177,27 @@ def cmp(a1, b1, a2, b2, curr, first = False):
     if first == True:
       curr = []
       first = False
-    diffinfo(a1,b1,a2,b2)
-    if type(b1) != list and type(b2) != list:
-      print("is b1 == b2")
-      if b1 == b2:
-        print("yes")
-        print("is a1 is not None")
-        if a1 is not None:
-          print("yes")
-          curr.append(a1)
+    #diffinfo(a1,b1,a2,b2)
+    if type(b1) != list or type(b2) != list:
+      if type(b1) != list and type(b2) != list:
+        #print("is b1 == b2")
+        if b1 == b2:
+          #print("yes")
+          #print("is a1 is not None")
+          if a1 is not None:
+            #print("yes")
+            curr.append(a1)
+          else:
+            #print("no")
+            curr.append(None)
+          curr.append(b1)
         else:
-          print("no")
-        curr.append(b1)
+          #print("no")
+          curr.append(None)
+          curr.append(None)
       else:
-        print("no")
+        curr.append(None)
+        curr.append(None)
     if type(b1) == list and type(b2) == list:
         if a1 is not None:
             curr.append(a1)
@@ -213,40 +221,41 @@ def do_dot(foo_sym, frame):
         prev = curr
         
     global diff_curr
+    global diff_curr2
     global diff_prev
     if diff_curr:
         diff_prev = diff_curr
         
     curr = print_struct_follow_pointers(frame, foo_sym, foo_val(), curr, depth)
-    #gdb.write("curr = [\n")
-    #rec(curr, 2)
-    #gdb.write("]\n")
+    gdb.write("curr = [\n")
+    rec(curr, 2)
+    gdb.write("]\n")
 
-    #gdb.write("prev = [\n")
-    #rec(prev, 2)
-    #gdb.write("]\n")
-
-    #diff_curr = cmp(None, curr, None, prev, diff_curr, True)
+    gdb.write("prev = [\n")
+    rec(prev, 2)
+    gdb.write("]\n")
+    if prev:
+      diff_curr = cmp(None, curr, None, prev, diff_curr, True)
     
-    #gdb.write("diff_curr = [\n")
-    #rec(diff_curr, 2)
-    #gdb.write("]\n")
+      gdb.write("diff_curr = [\n")
+      rec(diff_curr, 2)
+      gdb.write("]\n")
     
-    #gdb.write("diff_prev = [\n")
-    #rec(diff_prev, 2)
-    #gdb.write("]\n")
+      gdb.write("diff_prev = [\n")
+      rec(diff_prev, 2)
+      gdb.write("]\n")
+      if diff_prev:
+        diff_curr2 = cmp(None, diff_curr, None, diff_prev, diff_curr, True)
+        gdb.write("diff_curr2 = [\n")
+        rec(diff_curr2, 2)
+        gdb.write("]\n")
     
-    #diff_curr2 = cmp(None, diff_curr, None, diff_prev, diff_curr, True)
-    #gdb.write("diff_curr2 = [\n")
-    #rec(diff_curr2, 2)
-    #gdb.write("]\n")
+    gdb.write("curr = %s\n" % curr)
+    gdb.write("prev = %s\n" % prev)
     
-    #gdb.write("curr = %s\n" % curr)
-    #gdb.write("prev = %s\n" % prev)
-    
-    #gdb.write("dfc1 = %s\n" % diff_curr)
-    #gdb.write("dfp1 = %s\n" % diff_prev)
-    #gdb.write("dfc2 = %s\n" % diff_curr2)
+    gdb.write("dfc1 = %s\n" % diff_curr)
+    gdb.write("dfp1 = %s\n" % diff_prev)
+    gdb.write("dfc2 = %s\n" % diff_curr2)
 
     
 
@@ -295,8 +304,8 @@ def find_local(name, pcval, frame):
         if symbol.name == str(name):
             found = True
             do_dot(symbol, frame)
-    #if found == False:
-        #gdb.write('No symbol "%s" in local block.\n' % str(name))
+    if found == False:
+        gdb.write('No symbol "%s" in local block.\n' % str(name))
     return found
     
 def find_frame_current(name, pcval, frame):
@@ -346,7 +355,7 @@ class Tree(gdb.Command):
             not_running()
             return
         frame = gdb.selected_frame ()
-        #gdb.write('Finding "%s"\n' % str(name))
+        gdb.write('Finding "%s"\n' % str(name))
         if things[scope_local](name, pcval, frame) is False:
             if things[scope_global](name, pcval, frame) is False:
                 if things[scope_frame_current](name, pcval, frame) is False:
