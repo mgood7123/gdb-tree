@@ -1,12 +1,10 @@
 import gdb
 
-depth = 999
+depth = 4
 
-curr = []
-prev = []
-diff = []
-diff_curr = []
-diff_prev = []
+curr = {}
+prev = {}
+diff = {}
 
 
 def valinfo(foo_val):
@@ -43,8 +41,8 @@ def is_string(v):
 lineend = ';'
 
 def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3, level = 0, pointers = 0):
-    tmp = []
-    curr.append(tmp)
+    tmp = {}
+    curr[name] = tmp
 
     indent = '  ' * level
     pointer_indent = '*' * pointers
@@ -62,7 +60,6 @@ def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3
         indent = '  ' * level
         for k in stype.keys():
             v = s[k]
-            tmp.append(k)
             vtype = gdb.types.get_basic_type(v.type)
             if is_pointer(v) and not is_string(v):
                 try:
@@ -73,14 +70,14 @@ def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3
                         v1.fetch_lazy()
                 except gdb.error:
                     gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
-                    tmp.append("NULL")
+                    tmp[k] = "NULL"
                     continue
                 print_struct_follow_pointers_inner(frame, k, v1, tmp, level_limit, level)
             elif is_container(v):
                 print_struct_follow_pointers_inner(frame, k, v, tmp, level_limit, level)
             else:
                 gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
-                tmp.append(str(v))
+                tmp[k] = str(v)
         level = level - 1
         indent = '  ' * level
         gdb.write('%s} %s %s%s\n' % (indent, pointer_indent, name, lineend))
@@ -88,7 +85,7 @@ def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3
         gdb.write('%s%s { ... } %s %s%s\n' % (indent, stype, pointer_indent, name, lineend))
 
 def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, level = 0):
-    curr = []
+    curr = {}
     indent = '  ' * level
     s = value
     stype = gdb.types.get_basic_type(s.type)
@@ -106,7 +103,6 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
 
         for k in stype.keys():
             v = s[k]
-            curr.append(k)
             vtype = gdb.types.get_basic_type(v.type)
             if is_pointer(v) and not is_string(v):
                 try:
@@ -115,14 +111,14 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
                     pointers = pointers + 1
                 except gdb.error:
                     gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
-                    curr.append("NULL")
+                    curr[k] = "NULL"
                     continue
                 print_struct_follow_pointers_inner(frame, k, v1, curr, level_limit, level, pointers)
             elif is_container(v):
                 print_struct_follow_pointers_inner(frame, k, v, curr, level_limit, level, pointers)
             else:
                 gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
-                curr.append(str(v))
+                curr[k] = str(v)
         level = level - 1
         indent = '  ' * level
         gdb.write('%s} ' % indent)
@@ -150,57 +146,117 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
 
 def syminfo(foo_sym):
         gdb.write('Symbol "%s" found and is of type "%s" and a value of type "%s" and value "%s"\n' % (foo_sym.name, foo_sym.type, foo_sym.value, foo_sym.value()))
-        
+
 def rec(x, level = 0):
-    i = ' ' * level
-    for item, val in zip(x[::2], x[1::2]):
-        if isinstance(val, list):
-            gdb.write("%sitem %s : [\n" %(i, item))
-            rec(val, level + 2)
-            gdb.write("%s]\n" %(i))
-        else:
-            gdb.write("%sitem %s : val %s\n" %(i, item, val))
-            
-diff_curr = []
-diff_prev = []
-def diffinfo(a,b,c,d):
-  gdb.write("\nDIFF INFO\n")
-  gdb.write("a1 = %s\n" % a)
-  gdb.write("b1 = %s\n" % b)
-  gdb.write("a2 = %s\n" % c)
-  gdb.write("b2 = %s\n" % d)
-  gdb.write("DIFF INFO\n\n")
-  
-#itterate two items at a time
-def cmp(a1, b1, a2, b2, curr, first = False):
-    if first == True:
-      curr = []
-      first = False
-    diffinfo(a1,b1,a2,b2)
-    if type(b1) != list and type(b2) != list:
-      print("is b1 == b2")
-      if b1 == b2:
-        print("yes")
-        print("is a1 is not None")
-        if a1 is not None:
-          print("yes")
-          curr.append(a1)
-        else:
-          print("no")
-        curr.append(b1)
+  i = ' ' * level
+  for (key, a) in x.items():
+    if type(a) is tuple:
+      previous, current = a
+      if type(current) == dict:
+        print("%s%s = {" % (i, key))
+        rec(current, level + 2)
+        print("%s}" % i)
       else:
-        print("no")
-    if type(b1) == list and type(b2) == list:
-        if a1 is not None:
-            curr.append(a1)
-        tmp = []
-        curr.append(tmp)
-        ita = iter(b1)
-        itb = iter(b2)
-        for (x1, x2), (y1, y2) in zip(zip(ita, ita), zip(itb, itb)):
-          curr = cmp(x1,x2,y1,y2, tmp)
-    return curr
-  
+        print("%s%s = \n%s%sprev = %s\n%s%scurr = %s" % (i, key, i,i,previous, i,i,current))
+    elif type(a) is dict:
+      print("%s%s = {" % (i, key))
+      rec(a, level + 2)
+      print("%s}" % i)
+    else:
+      print("%s%s = %s" % (i,key, str(a)))
+      
+# credit: altendky ##python freenode
+
+import itertools
+
+import attr
+
+@attr.s(frozen=True, repr=False)
+class Same:
+    pass
+
+    def __repr__(self):
+        return type(self).__name__
+
+Same = Same()
+
+@attr.s(frozen=True, repr=False)
+class Missing:
+    pass
+
+    def __repr__(self):
+        return type(self).__name__
+
+Missing = Missing()
+
+
+@attr.s
+class Dispatch:
+    collected = attr.ib(factory=dict)
+
+    def __call__(self, key=None):
+        def decorator(f):
+            self.collected[key] = f
+
+            return f
+        
+        return decorator
+
+    def __getitem__(self, item):
+        return self.collected[item]
+
+
+dispatch = Dispatch()
+
+# ----------------------
+
+mark_changed_dispatch = Dispatch()
+
+@attr.s(frozen=True, repr=False)
+class Changed:
+    pass
+
+    def __repr__(self):
+        return type(self).__name__
+
+Changed = Changed()
+
+@mark_changed_dispatch(dict)
+def dict_mark_changed(this, that):
+    results = {}
+    if this.keys() != that.keys():
+        raise Exception('assumption broken')
+    for (key, a), (other_key, b) in zip(this.items(), that.items()):
+        results[key] = mark_changed(a, b)
+    return results
+
+@mark_changed_dispatch(list)
+def list_mark_changed(this, that):
+    results = []
+    for a, b in itertools.zip_longest(this, that, fillvalue=Missing):
+        results.append(mark_changed(a, b))
+    
+    return results
+
+@mark_changed_dispatch(str)
+@mark_changed_dispatch(int)
+@mark_changed_dispatch(None)
+def direct_mark_changed(this, that):
+    if this == that:
+        return Same
+    
+    return (this, that)
+
+def mark_changed(this, that):
+    if type(this) != type(that):
+        key = None
+    else:
+        key = type(this)
+    
+    return mark_changed_dispatch[key](this, that)
+
+# end of credit
+
 def do_dot(foo_sym, frame):
     foo_val = foo_sym.value
     if foo_val(frame).type.code == gdb.TYPE_CODE_PTR:
@@ -212,41 +268,19 @@ def do_dot(foo_sym, frame):
     if curr:
         prev = curr
         
-    global diff_curr
-    global diff_prev
-    if diff_curr:
-        diff_prev = diff_curr
+    global diff
         
     curr = print_struct_follow_pointers(frame, foo_sym, foo_val(), curr, depth)
-    #gdb.write("curr = [\n")
-    #rec(curr, 2)
-    #gdb.write("]\n")
-
-    #gdb.write("prev = [\n")
-    #rec(prev, 2)
-    #gdb.write("]\n")
-
-    #diff_curr = cmp(None, curr, None, prev, diff_curr, True)
+    if prev:
+      diff = mark_changed(prev, curr)
     
-    #gdb.write("diff_curr = [\n")
-    #rec(diff_curr, 2)
-    #gdb.write("]\n")
-    
-    #gdb.write("diff_prev = [\n")
-    #rec(diff_prev, 2)
-    #gdb.write("]\n")
-    
-    #diff_curr2 = cmp(None, diff_curr, None, diff_prev, diff_curr, True)
-    #gdb.write("diff_curr2 = [\n")
-    #rec(diff_curr2, 2)
-    #gdb.write("]\n")
-    
+      gdb.write("diff = {\n")
+      rec(diff, 2)
+      gdb.write("}\n")
+        
     #gdb.write("curr = %s\n" % curr)
     #gdb.write("prev = %s\n" % prev)
-    
-    #gdb.write("dfc1 = %s\n" % diff_curr)
-    #gdb.write("dfp1 = %s\n" % diff_prev)
-    #gdb.write("dfc2 = %s\n" % diff_curr2)
+    gdb.write("diff = %s\n" % diff)
 
     
 
@@ -295,8 +329,8 @@ def find_local(name, pcval, frame):
         if symbol.name == str(name):
             found = True
             do_dot(symbol, frame)
-    #if found == False:
-        #gdb.write('No symbol "%s" in local block.\n' % str(name))
+    if found == False:
+        gdb.write('No symbol "%s" in local block.\n' % str(name))
     return found
     
 def find_frame_current(name, pcval, frame):
@@ -346,7 +380,7 @@ class Tree(gdb.Command):
             not_running()
             return
         frame = gdb.selected_frame ()
-        #gdb.write('Finding "%s"\n' % str(name))
+        gdb.write('Finding "%s"\n' % str(name))
         if things[scope_local](name, pcval, frame) is False:
             if things[scope_global](name, pcval, frame) is False:
                 if things[scope_frame_current](name, pcval, frame) is False:

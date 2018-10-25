@@ -1,3 +1,23 @@
+def rec(x, level = 0):
+  i = ' ' * level
+  for (key, a) in x.items():
+    if type(a) is tuple:
+      previous, current = a
+      if type(current) == dict:
+        print("%s%s = {" % (i, key))
+        rec(current, level + 2)
+        print("%s}" % i)
+      else:
+        print("%s%s = \n%s%sprev = %s\n%s%scurr = %s" % (i, key, i,i,previous, i,i,current))
+    elif type(a) is dict:
+      print("%s%s = {" % (i, key))
+      rec(a, level + 2)
+      print("%s}" % i)
+    else:
+      print("%s%s = %s" % (i,key, str(a)))
+      
+# credit: altendky ##python freenode
+
 import itertools
 
 import attr
@@ -58,18 +78,14 @@ def dict_mark_changed(this, that):
     if this.keys() != that.keys():
         raise Exception('assumption broken')
     for (key, a), (other_key, b) in zip(this.items(), that.items()):
-        if a == b:
-            results[key] = a
-            continue
-
-        results[key] = mark_changed(b, a)
+        results[key] = mark_changed(a, b)
     return results
 
 @mark_changed_dispatch(list)
 def list_mark_changed(this, that):
     results = []
     for a, b in itertools.zip_longest(this, that, fillvalue=Missing):
-        results.append(mark_changed(b, a))
+        results.append(mark_changed(a, b))
     
     return results
 
@@ -78,11 +94,11 @@ def list_mark_changed(this, that):
 @mark_changed_dispatch(None)
 def direct_mark_changed(this, that):
     if this == that:
-        return this
+        return Same
     
-    return Changed
+    return (this, that)
 
-def mark_changed(that, this):
+def mark_changed(this, that):
     if type(this) != type(that):
         key = None
     else:
@@ -90,13 +106,11 @@ def mark_changed(that, this):
     
     return mark_changed_dispatch[key](this, that)
 
+# end of credit
 
 curr = {}
 prev = {}
 diff = {}
-diff_curr = {}
-diff_curr2 = {}
-diff_prev = {}
 
 def dodict(dict):
     global curr
@@ -104,43 +118,13 @@ def dodict(dict):
     if curr:
         prev = curr
         
-    global diff_curr
-    global diff_curr2
-    global diff_prev
-    if diff_curr:
-        diff_prev = diff_curr
-        
+    global diff
     curr = dict
-    print("curr = [")
-    #rec(curr, 2)
-    print("]")
-
-    print("prev = [")
-    #rec(prev, 2)
-    print("]")
-
     if prev:
-      diff_curr = mark_changed(curr, prev)
-    
-      print("diff_curr = [")
-      #rec(diff_curr, 2)
-      print("]")
-    
-      print("diff_prev = [")
-      #rec(diff_prev, 2)
-      print("]")
-      if diff_prev:
-        diff_curr2 = mark_changed(diff_curr, diff_prev)
-        print("diff_curr2 = [")
-        #rec(diff_curr2, 2)
-        print("]")
-    
-    print("curr = %s" % curr)
-    print("prev = %s" % prev)
-    
-    print("dfc1 = %s" % diff_curr)
-    print("dfp1 = %s" % diff_prev)
-    print("dfc2 = %s" % diff_curr2)
+      diff = mark_changed(prev, curr)
+      print("diff = {")
+      rec(diff, 2)
+      print("}")
 
 dodict({'val1' : '5', 'next' : 'NULL', 'val2' : '0', 'string' : '0x555555554b44 "HI"'})
 dodict({'val1' : '20', 'next' : 'NULL', 'val2' : '0', 'string' : '0x555555554b44 "HI"'})
