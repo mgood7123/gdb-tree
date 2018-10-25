@@ -147,23 +147,72 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
 def syminfo(foo_sym):
         gdb.write('Symbol "%s" found and is of type "%s" and a value of type "%s" and value "%s"\n' % (foo_sym.name, foo_sym.type, foo_sym.value, foo_sym.value()))
 
+#shall check if a dict contains only X values
+def rec_(x, level = 0):
+  nones = 0
+  i = ' ' * level
+  for (key, a) in x.items():
+    if a is Same:
+      nones = nones + 1
+    if type(a) is tuple:
+      previous, current = a
+      level = level + 2
+      i = ' ' * level
+      if type(previous) == dict:
+        rec_(previous, level + 2)
+      if type(current) == dict:
+        rec_(current, level + 2)
+      level = level - 2
+      i = ' ' * level
+    elif type(a) is dict:
+      obtained_len = rec_(a, level + 2)
+      if obtained_len == len(a):
+        nones = nones + 1
+  return nones
+
 def rec(x, level = 0):
   i = ' ' * level
   for (key, a) in x.items():
     if type(a) is tuple:
       previous, current = a
-      if type(current) == dict:
-        print("%s%s = {" % (i, key))
-        rec(current, level + 2)
-        print("%s}" % i)
+      gdb.write("%s%s = \n" % (i,key))
+      level = level + 2
+      i = ' ' * level
+      gdb.write("%sprev = " % i)
+      if type(previous) == dict:
+        if previous == {}:
+          gdb.write("empty\n")
+        else:
+          gdb.write("{\n")
+          rec(previous, level + 2)
+          gdb.write("%s}\n" % (i))
       else:
-        print("%s%s = \n%s%sprev = %s\n%s%scurr = %s" % (i, key, i,i,previous, i,i,current))
+        gdb.write("%s\n" % previous)
+      gdb.write("%scurr = " % (i))
+      if type(current) == dict:
+        if current == {}:
+          gdb.write("empty\n")
+        else:
+          gdb.write("{\n")
+          rec(current, level + 2)
+          gdb.write("%s}\n" % (i))
+      else:
+        gdb.write("%s\n" % current)
+      level = level - 2
+      i = ' ' * level
     elif type(a) is dict:
-      print("%s%s = {" % (i, key))
-      rec(a, level + 2)
-      print("%s}" % i)
+      gdb.write("%s%s = " % (i, key))
+      if a == {}:
+          gdb.write("NULL\n")
+      else:
+        if len(a) == rec_(a):
+          gdb.write("Same\n")
+        else:
+          gdb.write("{\n")
+          rec(a, level + 2)
+          gdb.write("%s}\n" % i)
     else:
-      print("%s%s = %s" % (i,key, str(a)))
+      gdb.write("%s%s = %s\n" % (i,key, str(a)))
       
 # credit: altendky ##python freenode
 
@@ -274,9 +323,14 @@ def do_dot(foo_sym, frame):
     if prev:
       diff = mark_changed(prev, curr)
     
-      gdb.write("diff = {\n")
-      rec(diff, 2)
-      gdb.write("}\n")
+      gdb.write("diff = ")
+      if len(diff) == rec_(diff):
+        gdb.write("Same\n")
+      else:
+        gdb.write("{\n")
+        rec(diff, 2)
+        gdb.write("}\n")
+        rec_(diff, 2)
         
     #gdb.write("curr = %s\n" % curr)
     #gdb.write("prev = %s\n" % prev)
