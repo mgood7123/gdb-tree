@@ -1,6 +1,6 @@
 import gdb
 
-depth = 4
+depth = 14
 
 curr = {}
 prev = {}
@@ -39,8 +39,12 @@ def is_string(v):
     return str(v.type).startswith("char")
 
 lineend = ';'
-
+calls1 = 0
+calls2 = 0
 def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3, level = 0, pointers = 0):
+    global calls2
+    calls2 = calls2 + 1
+    gdb.write("print_struct_follow_pointers_inner called %d times\n" % calls2)
     tmp = {}
     curr[name] = tmp
 
@@ -51,11 +55,11 @@ def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3
     
 
     if not is_container(s):
-        gdb.write('%s%s\n' % (indent, s))
+        pass#gdb.write('%s%s\n' % (indent, s))
         return
 
     if level < level_limit:
-        gdb.write('%s%s {\n' % (indent, stype,))
+        pass#gdb.write('%s%s {\n' % (indent, stype,))
         level = level + 1
         indent = '  ' * level
         for k in stype.keys():
@@ -69,22 +73,25 @@ def print_struct_follow_pointers_inner(frame, name, value, curr, level_limit = 3
                         v1 = v1.dereference()
                         v1.fetch_lazy()
                 except gdb.error:
-                    gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
+                    pass#gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
                     tmp[k] = "NULL"
                     continue
                 print_struct_follow_pointers_inner(frame, k, v1, tmp, level_limit, level)
             elif is_container(v):
                 print_struct_follow_pointers_inner(frame, k, v, tmp, level_limit, level)
             else:
-                gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
+                pass#gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
                 tmp[k] = str(v)
         level = level - 1
         indent = '  ' * level
-        gdb.write('%s} %s %s%s\n' % (indent, pointer_indent, name, lineend))
+        pass#gdb.write('%s} %s %s%s\n' % (indent, pointer_indent, name, lineend))
     else:
-        gdb.write('%s%s { ... } %s %s%s\n' % (indent, stype, pointer_indent, name, lineend))
+        pass#gdb.write('%s%s { ... } %s %s%s\n' % (indent, stype, pointer_indent, name, lineend))
 
 def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, level = 0):
+    global calls1
+    calls1 = calls1 + 1
+    gdb.write("print_struct_follow_pointers called %d times\n" % calls1)
     curr = {}
     indent = '  ' * level
     s = value
@@ -92,12 +99,12 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
     pointers = 0
 
     if not is_container(s):
-        gdb.write('%s%s\n' % (indent, s))
+        pass#gdb.write('%s%s\n' % (indent, s))
         return curr
 
     if level < level_limit:
-        gdb.write('%s%s {' % (indent, stype,))
-        gdb.write('\n')
+        pass#gdb.write('%s%s {' % (indent, stype,))
+        pass#gdb.write('\n')
         level = level + 1
         indent = '  ' * level
 
@@ -110,20 +117,20 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
                     v1.fetch_lazy()
                     pointers = pointers + 1
                 except gdb.error:
-                    gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
+                    pass#gdb.write('%s%s %s = NULL%s\n' % (indent, vtype, k, lineend))
                     curr[k] = "NULL"
                     continue
                 print_struct_follow_pointers_inner(frame, k, v1, curr, level_limit, level, pointers)
             elif is_container(v):
                 print_struct_follow_pointers_inner(frame, k, v, curr, level_limit, level, pointers)
             else:
-                gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
+                pass#gdb.write('%s%s %s = %s%s\n' % (indent, vtype, k, v, lineend))
                 curr[k] = str(v)
         level = level - 1
         indent = '  ' * level
-        gdb.write('%s} ' % indent)
+        pass#gdb.write('%s} ' % indent)
     else:
-        gdb.write('%s%s { ... } ' % (indent, stype,))
+        pass#gdb.write('%s%s { ... } ' % (indent, stype,))
     ptr = foo_sym.value
 
     footype = gdb.types.get_basic_type(foo_sym.value(frame).type)
@@ -132,14 +139,14 @@ def print_struct_follow_pointers(frame, foo_sym, value, curr, level_limit = 3, l
     if ptrtype.code == gdb.TYPE_CODE_PTR:
         ptr = ptr(frame).dereference
         ptrtype = gdb.types.get_basic_type(ptr().type)
-        gdb.write('*')
+        pass#gdb.write('*')
         while ptrtype.code == gdb.TYPE_CODE_PTR:
             ptr = ptr().dereference
             ptrtype = gdb.types.get_basic_type(ptr().type)
-            gdb.write('*')
+            pass#gdb.write('*')
     if footype.code == gdb.TYPE_CODE_PTR:
-        gdb.write(' ')
-    gdb.write('%s%s\n' % (foo_sym.name, lineend))
+        pass#gdb.write(' ')
+    pass#gdb.write('%s%s\n' % (foo_sym.name, lineend))
     return curr
 
 # source https://stackoverflow.com/questions/23578312/gdb-pretty-printing-with-python-a-recursive-structure/23970415?s=2|8.2641#23970415
@@ -320,6 +327,9 @@ def do_dot(foo_sym, frame):
     global diff
         
     curr = print_struct_follow_pointers(frame, foo_sym, foo_val(), curr, depth)
+    global calls1
+    global calls2
+    gdb.write("total calls for print_struct_follow_pointers: %d\ntotal calls for print_struct_follow_pointers_inner: %d\n" % (calls1, calls2))
     if prev:
       diff = mark_changed(prev, curr)
     
@@ -334,7 +344,7 @@ def do_dot(foo_sym, frame):
         
     #gdb.write("curr = %s\n" % curr)
     #gdb.write("prev = %s\n" % prev)
-    gdb.write("diff = %s\n" % diff)
+    #gdb.write("diff = %s\n" % diff)
 
     
 
